@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700;1,800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #ff6b00;
+  --color-brand-glow: rgba(255, 107, 0, 0.1);
+  --color-brand-hover: #e65f00;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+  --color-border-light: rgba(0, 0, 0, 0.05);
+  --shadow-soft: 0 10px 30px -10px rgba(0, 0, 0, 0.08);
+  --shadow-hover: 0 20px 40px -15px rgba(255, 107, 0, 0.15);
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg-color: #ffffff;
+  --text-color: #1e293b;
+  --card-bg: #ffffff;
+}
+
+.dark {
+  --bg-color: #0c0e12;
+  --text-color: #f1f5f9;
+  --card-bg: #161a22;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  min-height: 100vh;
+  scroll-behavior: smooth;
+  font-family: 'Inter', sans-serif;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--bg-color)] text-[var(--text-color)] antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-slate-900 dark:text-white;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white border border-slate-100 rounded-3xl shadow-soft transition-all duration-300;
+  }
+  
+  .glass-card:hover {
+    @apply border-brand/20 shadow-hover -translate-y-1;
+  }
+  
+  .btn-primary {
+    @apply bg-brand text-white font-semibold py-3 px-8 rounded-2xl shadow-lg shadow-brand/20 hover:bg-brand-hover hover:-translate-y-1 transition-all duration-300 active:scale-95;
+  }
+  
+  .btn-secondary {
+    @apply bg-white text-brand border-2 border-brand font-semibold py-3 px-8 rounded-2xl hover:bg-brand/5 hover:-translate-y-1 transition-all duration-300 active:scale-95;
+  }
+  
+  .glow-text {
+    @apply text-brand font-bold;
+  }
+
+  .max-width {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+}
