@@ -14,9 +14,15 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useSimulation } from '../context/SimulationContext';
+import { safeGetItem } from '../utils/storage';
 
 const Policy = () => {
     const { plan, multiplier } = useSimulation();
+    const activeZone = safeGetItem('activeZone') || 'HITEC City';
+    const registrationPincode = safeGetItem('registrationPincode') || '500081';
+    const suggestedZones = registrationPincode.startsWith('500')
+        ? ['HITEC City', 'Madhapur', 'Gachibowli', 'Kukatpally']
+        : ['Delhi NCR', 'Mumbai West', 'Bangalore East', 'Chennai Central'];
 
     const triggers = [
         { icon: CloudRain, title: "Rain / Flood", logic: "Rainfall > 40mm in 3-hour window", payout: "₹320.00 × Multiplier", id: "01" },
@@ -56,9 +62,9 @@ const Policy = () => {
                   <div className="flex flex-col sm:flex-row gap-4 lg:pb-2 relative z-10 mt-8 lg:mt-0 px-4">
                     <div className="bg-white px-8 py-6 border border-slate-100 rounded-3xl shadow-xl shadow-brand/5">
                         <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">Operational Zone</p>
-                        <h4 className="text-xl font-extrabold text-slate-900">{localStorage.getItem('activeZone') || 'HITEC City'}</h4>
+                        <h4 className="text-xl font-extrabold text-slate-900">{activeZone}</h4>
                         <div className="mt-3 px-3 py-1 bg-slate-50 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center border border-slate-100 w-fit">
-                            PIN: {localStorage.getItem('registrationPincode') || '500081'}
+                            PIN: {registrationPincode}
                         </div>
                     </div>
                     <div className="bg-white px-8 py-6 border border-slate-100 rounded-3xl shadow-xl shadow-brand/5">
@@ -149,17 +155,14 @@ const Policy = () => {
                             <div>
                                 <h3 className="text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Premium Intelligence</h3>
                                 <p className="text-slate-500 font-medium leading-relaxed">
-                                    Your premium is dynamically calculated based on your active work zone's **365-day weather records** in Pincode **{localStorage.getItem('registrationPincode') || '500081'}**. 
+                                    Your premium is dynamically calculated based on your active work zone's **365-day weather records** in Pincode **{registrationPincode}**. 
                                 </p>
                             </div>
 
                             <div className="space-y-4">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Suggested Coverage Zones for You</label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {(localStorage.getItem('registrationPincode')?.startsWith('500') 
-                                        ? ['HITEC City', 'Madhapur', 'Gachibowli', 'Kukatpally'] 
-                                        : ['Delhi NCR', 'Mumbai West', 'Bangalore East', 'Chennai Central']
-                                    ).map(zone => (
+                                    {suggestedZones.map(zone => (
                                         <button 
                                             key={zone}
                                             className="px-6 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 text-slate-600 font-bold hover:border-brand/20 hover:bg-white hover:text-brand transition-all text-left flex items-center justify-between group"

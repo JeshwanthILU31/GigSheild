@@ -7,6 +7,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import AppRoutes from './routes/AppRoutes';
 import BackToTop from './components/BackToTop';
+import AppErrorBoundary from './components/AppErrorBoundary';
 import { useLocation } from 'react-router-dom';
 
 const LayoutWrapper = () => {
@@ -34,7 +35,9 @@ const LayoutWrapper = () => {
       {!isDashboard && <Navbar />}
       
       <main className="flex-grow">
-        <AppRoutes />
+        <AppErrorBoundary resetKey={location.pathname}>
+          <AppRoutes />
+        </AppErrorBoundary>
       </main>
       
       {!isDashboard && !isAuthPage && (
@@ -49,13 +52,15 @@ const LayoutWrapper = () => {
 
 function App() {
   return (
-    <AuthProvider>
-        <SimulationProvider>
-          <Router>
+    <Router>
+      <AppErrorBoundary resetKey={window.location.pathname}>
+        <AuthProvider>
+          <SimulationProvider>
             <LayoutWrapper />
-          </Router>
-        </SimulationProvider>
-    </AuthProvider>
+          </SimulationProvider>
+        </AuthProvider>
+      </AppErrorBoundary>
+    </Router>
   );
 }
 

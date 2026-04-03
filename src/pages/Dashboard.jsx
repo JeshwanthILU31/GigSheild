@@ -23,11 +23,13 @@ import {
   ArrowRight,
   X,
   Plus,
-  Crosshair
+  Crosshair,
+  History as HistoryIcon
 } from 'lucide-react';
 import { useSimulation } from '../context/SimulationContext';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
+import { safeGetItem } from '../utils/storage';
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -53,7 +55,7 @@ const Dashboard = () => {
     // Dynamic Region Generation based on Pincode
     useEffect(() => {
         const generateNearbyZones = () => {
-            const pincode = user?.pincode || localStorage.getItem('registrationPincode') || '560001';
+            const pincode = user?.pincode || safeGetItem('registrationPincode') || '560001';
             const base = parseInt(pincode);
             
             // Generate some mock surrounding pincodes/zones
@@ -259,7 +261,7 @@ const Dashboard = () => {
                         <div className="flex items-center justify-between mb-10">
                             <h3 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Claims History</h3>
                             <div className="w-8 h-8 bg-slate-50 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400">
-                                <History size={16} />
+                                <HistoryIcon size={16} />
                             </div>
                         </div>
 

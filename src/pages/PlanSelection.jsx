@@ -19,6 +19,7 @@ import {
 import { useSimulation } from '../context/SimulationContext';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
+import { safeGetItem } from '../utils/storage';
 
 const PlanSelection = () => {
     const navigate = useNavigate();
@@ -82,7 +83,7 @@ const PlanSelection = () => {
             weeklyPremium: selectedPlan.price,
             coverageCap: parseInt(selectedPlan.coverage.replace('₹', '').replace(',', '')),
             tier: selectedPlan.id,
-            pincode: user?.pincode || localStorage.getItem('registrationPincode')
+            pincode: user?.pincode || safeGetItem('registrationPincode')
         });
 
         if (res.success) {

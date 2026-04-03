@@ -1,8 +1,21 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
 import { ENDPOINTS } from '../config/api';
+import { safeGetItem, safeParse, safeRemoveItems, safeSetItem, safeSetJSON } from '../utils/storage';
 
 const AuthContext = createContext();
+
+const normalizeAuthPayload = (responseData) => {
+    const payload = responseData?.data || responseData;
+    const token = payload?.token || responseData?.token || null;
+    const user = payload?.worker || payload?.user || responseData?.worker || responseData?.user || null;
+
+    if (!token || !user) {
+        return null;
+    }
+
+    return { token, user };
+};
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
@@ -10,36 +23,49 @@ export const AuthProvider = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     useEffect(() => {
-        const storedUser = localStorage.getItem('user');
-        const token = localStorage.getItem('authToken');
+        const storedUser = safeParse('user');
+        const token = safeGetItem('authToken');
+
         if (storedUser && token) {
-            setUser(JSON.parse(storedUser));
+            setUser(storedUser);
             setIsAuthenticated(true);
+        } else {
+            safeRemoveItems('user', 'authToken');
         }
+
         setLoading(false);
     }, []);
 
     const login = async (credentials) => {
         try {
             const response = await api.post(ENDPOINTS.AUTH.LOGIN, credentials);
-            const { user, token } = response.data;
-            localStorage.setItem('user', JSON.stringify(user));
-            localStorage.setItem('authToken', token);
+            const authPayload = normalizeAuthPayload(response.data);
+
+            if (!response.data?.success || !authPayload) {
+                safeRemoveItems('user', 'authToken');
+                return { success: false, error: response.data?.message || 'Login failed' };
+            }
+
+            const { user, token } = authPayload;
+
+            safeSetJSON('user', user);
+            safeSetItem('authToken', token);
             setUser(user);
             setIsAuthenticated(true);
+
             return { success: true };
         } catch (error) {
             // Fallback for demo/development
             if (!error.response && (credentials.email || credentials.password)) {
                 console.warn('Backend offline, using mock login');
                 const mockUser = { 
-                    name: localStorage.getItem('registrationName') || 'Guest Partner', 
+                    name: safeGetItem('registrationName') || 'Guest Partner', 
                     email: credentials.email || 'guest@gig.com',
                     platform: 'Zomato',
                     zone: null // Trigger zone selection in dashboard
                 };
-                localStorage.setItem('user', JSON.stringify(mockUser));
-                localStorage.setItem('authToken', 'mock-token');
+                safeSetJSON('user', mockUser);
+                safeSetItem('authToken', 'mock-token');
                 setUser(mockUser);
                 setIsAuthenticated(true);
                 return { success: true };
@@ -52,15 +78,15 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await api.post(ENDPOINTS.AUTH.REGISTER, userData);
             // Save pincode for zone filtering in dashboard
-            localStorage.setItem('registrationPincode', userData.pincode);
-            localStorage.setItem('registrationName', userData.name);
+            safeSetItem('registrationPincode', userData.pinCode);
+            safeSetItem('registrationName', userData.name);
             return { success: true, data: response.data };
         } catch (error) {
             // Fallback for demo/development if backend is offline
             if (!error.response) {
                 console.warn('Backend offline, using mock registration');
-                localStorage.setItem('registrationPincode', userData.pincode);
-                localStorage.setItem('registrationName', userData.name);
+                safeSetItem('registrationPincode', userData.pinCode);
+                safeSetItem('registrationName', userData.name);
                 return { success: true, data: { message: 'Mock registration successful' } };
             }
             return { success: false, error: error.response?.data?.message || 'Registration failed' };
@@ -76,11 +102,11 @@ export const AuthProvider = ({ children }) => {
         } else {
             document.documentElement.classList.remove('dark');
         }
-        localStorage.setItem('theme', nextTheme);
+        safeSetItem('theme', nextTheme);
     };
 
     useEffect(() => {
-        const savedTheme = localStorage.getItem('theme') || 'light';
+        const savedTheme = safeGetItem('theme') || 'light';
         setTheme(savedTheme);
         if (savedTheme === 'dark') {
             document.documentElement.classList.add('dark');
@@ -90,12 +116,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const logout = () => {
-        localStorage.removeItem('user');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('userEmail');
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('registrationPincode');
-        localStorage.removeItem('registrationName');
+        safeRemoveItems('user', 'authToken', 'userEmail', 'adminToken', 'registrationPincode', 'registrationName');
         setUser(null);
         setIsAuthenticated(false);
     };
@@ -103,7 +124,16 @@ export const AuthProvider = ({ children }) => {
     const verifyOtp = async (otpData) => {
         try {
             const response = await api.post(ENDPOINTS.AUTH.VERIFY_OTP, otpData);
-            return { success: true, data: response.data };
+
+            const authPayload = normalizeAuthPayload(response.data);
+            if (response.data?.success && authPayload) {
+                safeSetJSON('user', authPayload.user);
+                safeSetItem('authToken', authPayload.token);
+                setUser(authPayload.user);
+                setIsAuthenticated(true);
+            }
+
+            return { success: Boolean(response.data?.success), data: response.data };
         } catch (error) {
             // Fallback for demo/development
             if (!error.response) {
@@ -114,13 +144,21 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const resendOtp = async (email) => {
+    const resendOtp = async (registrationData) => {
         try {
-            const response = await api.post(ENDPOINTS.AUTH.RESEND_OTP, { email });
-            return { success: true, data: response.data };
+            const response = await api.post(ENDPOINTS.AUTH.REGISTER, registrationData);
+
+            if (registrationData?.pinCode) {
+                safeSetItem('registrationPincode', registrationData.pinCode);
+            }
+            if (registrationData?.name) {
+                safeSetItem('registrationName', registrationData.name);
+            }
+
+            return { success: Boolean(response.data?.success), data: response.data };
         } catch (error) {
             // Fallback for demo/development
-            if (!error.response) {
+            if (!error.response && registrationData) {
                 console.warn('Backend offline, using mock OTP resend');
                 return { success: true, data: { message: 'Mock OTP sent' } };
             }

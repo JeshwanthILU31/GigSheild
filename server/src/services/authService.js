@@ -146,6 +146,41 @@ const verifyWorkerOtp = async ({ email, otp }) => {
   };
 };
 
+const resendWorkerOtp = async ({ email }) => {
+  if (!email) {
+    const error = new Error('email is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const worker = await Worker.findOne({ email: normalizedEmail });
+
+  if (!worker) {
+    const error = new Error('Worker not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (worker.isVerified) {
+    const error = new Error('Worker is already verified');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const otp = generateOtp();
+  setOtp(normalizedEmail, otp);
+
+  if (process.env.NODE_ENV === 'production') {
+    await sendOtpEmail(normalizedEmail, otp);
+  }
+
+  return {
+    email: worker.email,
+    otp
+  };
+};
+
 const loginWorker = async ({ identifier, email, phone, password }) => {
   const loginIdentifier = identifier || email || phone;
 
@@ -204,5 +239,6 @@ const loginWorker = async ({ identifier, email, phone, password }) => {
 module.exports = {
   registerWorker,
   verifyWorkerOtp,
+  resendWorkerOtp,
   loginWorker
 };

@@ -21,15 +21,17 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSimulation } from '../context/SimulationContext';
+import { safeGetItem, safeSetItem } from '../utils/storage';
 
 const SettingsPage = () => {
     const { user, logout, theme, toggleTheme } = useAuth();
     const { plan } = useSimulation();
     const [activeTab, setActiveTab] = useState('general');
-    const [selectedZone, setSelectedZone] = useState(localStorage.getItem('activeZone') || 'HITEC City');
+    const [selectedZone, setSelectedZone] = useState(safeGetItem('activeZone') || 'HITEC City');
+    const registrationPincode = safeGetItem('registrationPincode') || '';
 
     const handleSaveZone = () => {
-        localStorage.setItem('activeZone', selectedZone);
+        safeSetItem('activeZone', selectedZone);
         alert('Coverage Area updated to ' + selectedZone);
     };
 
@@ -183,7 +185,7 @@ const SettingsPage = () => {
                                     </div>
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {(localStorage.getItem('registrationPincode')?.startsWith('500') 
+                                        {(registrationPincode.startsWith('500') 
                                             ? ['HITEC City', 'Madhapur', 'Gachibowli', 'Kukatpally'] 
                                             : ['Delhi NCR', 'Mumbai West', 'Bangalore East', 'Chennai Central']
                                         ).map(zone => (

@@ -1,6 +1,7 @@
 const {
   registerWorker,
   verifyWorkerOtp,
+  resendWorkerOtp,
   loginWorker
 } = require('../services/authService');
 
@@ -19,7 +20,7 @@ const register = async (req, res) => {
     };
 
     if (process.env.NODE_ENV !== 'production') {
-      response.data.otp = result.otp;
+      response.otp = result.otp;
     }
 
     return res.status(201).json(response);
@@ -50,6 +51,32 @@ const verifyOtp = async (req, res) => {
   }
 };
 
+const resendOtp = async (req, res) => {
+  try {
+    const result = await resendWorkerOtp(req.body);
+
+    const response = {
+      success: true,
+      message: 'OTP resent successfully',
+      data: {
+        email: result.email
+      }
+    };
+
+    if (process.env.NODE_ENV !== 'production') {
+      response.data.otp = result.otp;
+    }
+
+    return res.status(200).json(response);
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'OTP resend failed'
+    });
+  }
+};
+
 const login = async (req, res) => {
   try {
     const result = await loginWorker(req.body);
@@ -71,5 +98,6 @@ const login = async (req, res) => {
 module.exports = {
   register,
   verifyOtp,
+  resendOtp,
   login
 };

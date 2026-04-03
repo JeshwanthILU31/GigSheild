@@ -12,6 +12,22 @@ import zeptoLogo from '../assets/zepto.png';
 
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { safeSetItem, safeSetJSON } from '../utils/storage';
+
+const activeHoursMap = {
+    Morning: { start: '06:00', end: '14:00' },
+    Afternoon: { start: '12:00', end: '20:00' },
+    Evening: { start: '16:00', end: '23:00' },
+    Night: { start: '20:00', end: '04:00' }
+};
+
+const platformZoneMap = {
+    Swiggy: 'Madhapur',
+    Zomato: 'Hitech City',
+    UberEats: 'Gachibowli',
+    Zepto: 'Kondapur',
+    Blinkit: 'Madhapur'
+};
 
 const Register = () => {
     const navigate = useNavigate();
@@ -22,10 +38,11 @@ const Register = () => {
         phone: '',
         password: '',
         platform: 'Swiggy',
-        platformId: 'SW-',
-        pincode: '',
+        partnerId: 'SW-',
+        zone: platformZoneMap.Swiggy,
+        pinCode: '',
         upiId: '',
-        activeHours: 'morning'
+        activeHours: ''
     });
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
@@ -56,14 +73,15 @@ const Register = () => {
         setFormData({
             ...formData, 
             platform, 
-            platformId: prefix
+            partnerId: prefix,
+            zone: platformZoneMap[platform] || platformZoneMap.Swiggy
         });
         setErrors({...errors, platformId: ''});
     };
 
     const handleIdChange = (e) => {
         const val = e.target.value;
-        setFormData({...formData, platformId: val});
+        setFormData({...formData, partnerId: val});
         
         if (!validateId(val, formData.platform)) {
             setErrors({
@@ -77,21 +95,45 @@ const Register = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!validateId(formData.platformId, formData.platform)) {
+
+        if (!validateId(formData.partnerId, formData.platform)) {
             setErrors({
                 ...errors, 
                 platformId: `Invalid format. Must start with ${platformPrefixes[formData.platform]}`
             });
             return;
         }
+
+        if (!formData.activeHours || !activeHoursMap[formData.activeHours]) {
+            setErrors({
+                ...errors,
+                activeHours: 'Please select your active hours'
+            });
+            return;
+        }
+
         setLoading(true);
         setErrors({});
 
         try {
-            const result = await register(formData);
+            const payload = {
+                name: formData.name,
+                phone: formData.phone,
+                email: formData.email,
+                password: formData.password,
+                partnerId: formData.partnerId,
+                zone: formData.zone || platformZoneMap[formData.platform] || platformZoneMap.Swiggy,
+                pinCode: formData.pinCode,
+                upiId: formData.upiId,
+                activeHours: activeHoursMap[formData.activeHours]
+            };
+
+            console.log('Register payload:', payload);
+            const result = await register(payload);
             if (result.success) {
-                localStorage.setItem('userEmail', formData.email);
-                localStorage.setItem('isNewRegistration', 'true');
+                safeSetJSON('pendingRegistrationData', payload);
+                safeSetItem('userEmail', formData.email);
+                safeSetItem('isNewRegistration', 'true');
                 navigate('/verify-otp');
             } else {
                  setErrors({ submit: result.error });
@@ -268,7 +310,7 @@ const Register = () => {
                                 <input 
                                     required
                                     type="text" 
-                                    value={formData.platformId}
+                                    value={formData.partnerId}
                                     className={`w-full bg-slate-50 border rounded-2xl px-6 py-4 text-slate-800 focus:bg-white outline-none transition-all placeholder:text-slate-300 font-bold uppercase tracking-widest ${errors.platformId ? 'border-rose-400/50' : 'border-slate-100 focus:border-brand/40'}`}
                                     placeholder={platformPrefixes[formData.platform] + "12345"}
                                     onChange={handleIdChange}
@@ -286,10 +328,10 @@ const Register = () => {
                                 <input 
                                     required
                                     type="text" 
-                                    value={formData.pincode}
+                                    value={formData.pinCode}
                                     className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-slate-800 focus:border-brand/40 focus:bg-white outline-none transition-all placeholder:text-slate-300 font-bold"
                                     placeholder="560001"
-                                    onChange={(e) => setFormData({...formData, pincode: e.target.value})}
+                                    onChange={(e) => setFormData({...formData, pinCode: e.target.value})}
                                 />
                             </div>
 
@@ -313,14 +355,21 @@ const Register = () => {
                                 </label>
                                 <select 
                                     value={formData.activeHours}
-                                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-slate-800 focus:border-brand/40 focus:bg-white outline-none transition-all font-bold appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2210%22%20height%3D%226%22%20viewBox%3D%220%200%2010%206%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M1%201L5%205L9%201%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:12px_8px] bg-[right_1.5rem_center] bg-no-repeat"
-                                    onChange={(e) => setFormData({...formData, activeHours: e.target.value})}
+                                    className={`w-full bg-slate-50 border rounded-2xl px-6 py-4 text-slate-800 focus:bg-white outline-none transition-all font-bold appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2210%22%20height%3D%226%22%20viewBox%3D%220%200%2010%206%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M1%201L5%205L9%201%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:12px_8px] bg-[right_1.5rem_center] bg-no-repeat ${errors.activeHours ? 'border-rose-400/50' : 'border-slate-100 focus:border-brand/40'}`}
+                                    onChange={(e) => {
+                                        setFormData({...formData, activeHours: e.target.value});
+                                        setErrors({...errors, activeHours: ''});
+                                    }}
                                 >
-                                    <option value="morning">Morning</option>
-                                    <option value="afternoon">Afternoon</option>
-                                    <option value="evening">Evening</option>
-                                    <option value="allday">All Day</option>
+                                    <option value="">Select shift</option>
+                                    <option value="Morning">Morning</option>
+                                    <option value="Afternoon">Afternoon</option>
+                                    <option value="Evening">Evening</option>
+                                    <option value="Night">Night</option>
                                 </select>
+                                {errors.activeHours && (
+                                    <p className="text-[9px] text-rose-500 font-bold uppercase tracking-widest px-1">{errors.activeHours}</p>
+                                )}
                             </div>
 
                             {errors.submit && (

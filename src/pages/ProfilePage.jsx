@@ -17,7 +17,7 @@ import {
   Settings,
   CheckCircle2,
   AlertTriangle,
-  History,
+  History as HistoryIcon,
   CloudRain,
   ArrowRight
 } from 'lucide-react';
@@ -172,7 +172,7 @@ const ProfilePage = () => {
                         <div className="flex items-center justify-between mb-8 relative z-10">
                             <div className="flex items-center gap-4">
                                 <div className="w-10 h-10 bg-green-50 dark:bg-green-500/10 border border-green-100 dark:border-green-500/20 rounded-xl flex items-center justify-center text-green-600 dark:text-green-400 shadow-sm text-sm">
-                                    <History size={20} />
+                                    <HistoryIcon size={20} />
                                 </div>
                                 <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Settlement Sync</h3>
                             </div>

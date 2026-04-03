@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
-import { Shield, LayoutDashboard, FileText, Settings, LogOut, History, User } from 'lucide-react';
+import { Shield, LayoutDashboard, FileText, Settings, LogOut, History as HistoryIcon, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSimulation } from '../../context/SimulationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -21,7 +21,7 @@ const Sidebar = () => {
     const navItems = [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
         { name: 'Policy Details', path: '/dashboard/policy', icon: FileText },
-        { name: 'Payout History', path: '/dashboard/history', icon: History },
+        { name: 'Payout History', path: '/dashboard/history', icon: HistoryIcon },
         { name: 'Settings', path: '/dashboard/settings', icon: Settings },
     ];
 

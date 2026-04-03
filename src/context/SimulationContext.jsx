@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
 import { ENDPOINTS } from '../config/api';
+import { safeGetItem, safeParse, safeRemoveItems } from '../utils/storage';
 
 const SimulationContext = createContext();
 
@@ -27,9 +28,10 @@ export const SimulationProvider = ({ children }) => {
     // Sync state with localStorage and backend
     useEffect(() => {
         const syncData = async () => {
-            const savedUser = localStorage.getItem('user');
-            if (savedUser) {
-                const parsedUser = JSON.parse(savedUser);
+            const parsedUser = safeParse('user');
+            const token = safeGetItem('authToken');
+
+            if (parsedUser && token) {
                 setUser(parsedUser);
                 setIsRegistered(true);
                 
@@ -54,6 +56,12 @@ export const SimulationProvider = ({ children }) => {
                 } catch (err) {
                     console.warn('Could not fetch claims history');
                 }
+            } else {
+                safeRemoveItems('user', 'authToken');
+                setUser(null);
+                setIsRegistered(false);
+                setPayoutHistory([]);
+                setTotalPayouts(0);
             }
         };
         syncData();

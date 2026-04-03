@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Key, ArrowRight, UserCircle2, Loader2, AlertCircle, LayoutDashboard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { safeSetItem } from '../utils/storage';
 
 const AdminLogin = () => {
     const navigate = useNavigate();
@@ -22,7 +23,7 @@ const AdminLogin = () => {
             await new Promise(resolve => setTimeout(resolve, 1500));
             
             if (credentials.username === 'admin' && credentials.password === 'admin123') {
-                localStorage.setItem('adminToken', 'mock-admin-session');
+                safeSetItem('adminToken', 'mock-admin-session');
                 navigate('/admin');
             } else {
                 setError('Invalid administrative credentials. Access Denied.');

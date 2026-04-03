@@ -19,12 +19,12 @@ import PlanSelection from '../pages/PlanSelection';
 import ProfilePage from '../pages/ProfilePage';
 import AdminLogin from '../pages/AdminLogin';
 import AdminDashboard from '../pages/Admin';
-import { History, Settings } from 'lucide-react';
+import { safeGetItem } from '../utils/storage';
 
 const AppRoutes = () => {
     const { isRegistered } = useSimulation();
     const { isAuthenticated } = useAuth();
-    const isAdmin = localStorage.getItem('adminToken') === 'mock-admin-session';
+    const isAdmin = safeGetItem('adminToken') === 'mock-admin-session';
 
     // Bridge for transition: consider user authenticated if either context says so
     const isUserAuthenticated = isAuthenticated || isRegistered;
