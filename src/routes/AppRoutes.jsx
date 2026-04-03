@@ -11,39 +11,53 @@ import DashboardLayout from '../layouts/DashboardLayout';
 import { useSimulation } from '../context/SimulationContext';
 import { useAuth } from '../context/AuthContext.jsx';
 import ProtectedRoute from '../components/ProtectedRoute.jsx';
+import PublicRoute from '../components/PublicRoute.jsx';
 import AdminProtectedRoute from '../components/AdminProtectedRoute';
 import HistoryPage from '../pages/HistoryPage';
 import SettingsPage from '../pages/SettingsPage';
 import PlanSelection from '../pages/PlanSelection';
-
 import ProfilePage from '../pages/ProfilePage';
 import AdminLogin from '../pages/AdminLogin';
 import AdminDashboard from '../pages/Admin';
-import { History, Settings } from 'lucide-react';
 
 const AppRoutes = () => {
-    const { isRegistered } = useSimulation();
-    const { isAuthenticated } = useAuth();
-    const isAdmin = localStorage.getItem('adminToken') === 'mock-admin-session';
-
-    // Bridge for transition: consider user authenticated if either context says so
-    const isUserAuthenticated = isAuthenticated || isRegistered;
-
     return (
         <Routes>
-            {/* Public Routes */}
+            {/* Public/Guest Routes - Wrapped in PublicRoute to redirect away if already logged in */}
             <Route 
                 path="/" 
                 element={
-                    isUserAuthenticated ? <Navigate to="/dashboard" replace /> : <Home />
+                    <PublicRoute>
+                        <Home />
+                    </PublicRoute>
                 } 
             />
-            <Route path="/pricing" element={<PricingPage />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/verify-otp" element={<VerifyOtp />} />
-            <Route path="/login" element={<LoginPage />} />
+            <Route 
+                path="/register" 
+                element={
+                    <PublicRoute>
+                        <Register />
+                    </PublicRoute>
+                } 
+            />
+            <Route 
+                path="/verify-otp" 
+                element={
+                    <PublicRoute>
+                        <VerifyOtp />
+                    </PublicRoute>
+                } 
+            />
+            <Route 
+                path="/login" 
+                element={
+                    <PublicRoute>
+                        <LoginPage />
+                    </PublicRoute>
+                } 
+            />
             
-            {/* Admin Routes */}
+            {/* Admin Routes - Separately protected for administrative access */}
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route 
                 path="/admin" 
@@ -54,7 +68,7 @@ const AppRoutes = () => {
                 } 
             />
             
-            {/* Protected Dashboard Area */}
+            {/* Protected Routes - Only accessible when authenticated */}
             <Route 
                 path="/dashboard" 
                 element={
@@ -71,7 +85,17 @@ const AppRoutes = () => {
                 <Route path="settings" element={<SettingsPage />} />
             </Route>
 
-            {/* Fallback */}
+            {/* Additional Protected Areas (like Pricing) */}
+            <Route 
+                path="/pricing" 
+                element={
+                    <ProtectedRoute>
+                        <PricingPage />
+                    </ProtectedRoute>
+                } 
+            />
+
+            {/* Fallback to root (which handles redirection via guards) */}
             <Route path="*" element={<Navigate to="/" />} />
         </Routes>
     );
