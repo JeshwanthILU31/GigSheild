@@ -15,6 +15,8 @@ import AdminProtectedRoute from '../components/AdminProtectedRoute';
 import HistoryPage from '../pages/HistoryPage';
 import SettingsPage from '../pages/SettingsPage';
 import PlanSelection from '../pages/PlanSelection';
+import LocationSelection from '../pages/LocationSelection';
+import BillingPage from '../pages/BillingPage';
 
 import ProfilePage from '../pages/ProfilePage';
 import AdminLogin from '../pages/AdminLogin';
@@ -34,9 +36,7 @@ const AppRoutes = () => {
             {/* Public Routes */}
             <Route 
                 path="/" 
-                element={
-                    isUserAuthenticated ? <Navigate to="/dashboard" replace /> : <Home />
-                } 
+                element={<Home />} 
             />
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/register" element={<Register />} />
@@ -65,7 +65,9 @@ const AppRoutes = () => {
             >
                 <Route index element={<Dashboard />} />
                 <Route path="select-plan" element={<PlanSelection />} />
+                <Route path="select-location" element={<LocationSelection />} />
                 <Route path="policy" element={<Policy />} />
+                <Route path="billing" element={<BillingPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="history" element={<HistoryPage />} />
                 <Route path="settings" element={<SettingsPage />} />

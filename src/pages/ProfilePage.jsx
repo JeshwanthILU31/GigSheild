@@ -31,9 +31,11 @@ const ProfilePage = () => {
     const navigate = useNavigate();
 
     const handleLogout = () => {
-        logout();
         setIsRegistered(false);
         navigate('/');
+        setTimeout(() => {
+            logout();
+        }, 10);
     };
 
     // Plan features articulation

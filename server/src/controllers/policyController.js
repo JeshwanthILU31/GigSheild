@@ -175,9 +175,77 @@ const getPolicyHistory = async (req, res) => {
   }
 };
 
+const resumePolicy = async (req, res) => {
+  try {
+    const policy = await Policy.findOne({
+      workerId: req.worker._id,
+      status: PAUSED_POLICY_STATUS
+    });
+
+    if (!policy) {
+      return res.status(404).json({
+        success: false,
+        message: 'Paused policy not found'
+      });
+    }
+
+    const updatedPolicy = await Policy.findByIdAndUpdate(
+      policy._id,
+      { status: ACTIVE_POLICY_STATUS },
+      { new: true }
+    ).populate('workerId');
+
+    return res.status(200).json({
+      success: true,
+      data: updatedPolicy
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to resume policy'
+    });
+  }
+};
+
+const updatePolicy = async (req, res) => {
+  try {
+    const worker = await Worker.findById(req.worker._id);
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'Worker not found' });
+    }
+
+    const existingPolicy = await Policy.findOne({
+      workerId: worker._id,
+      status: { $in: [ACTIVE_POLICY_STATUS, PAUSED_POLICY_STATUS] }
+    });
+
+    if (!existingPolicy) {
+      return res.status(404).json({ success: false, message: 'Active policy not found to update' });
+    }
+
+    const { weeklyPremium, coverageCap, tier } = req.body;
+
+    const updatedPolicy = await Policy.findByIdAndUpdate(
+      existingPolicy._id,
+      { 
+         weeklyPremium: weeklyPremium || existingPolicy.weeklyPremium,
+         premiumTier: tier ? tier.toUpperCase() : existingPolicy.premiumTier, 
+         coverageCap: coverageCap || existingPolicy.coverageCap
+      },
+      { new: true }
+    ).populate('workerId');
+
+    return res.status(200).json({ success: true, data: updatedPolicy });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || 'Failed to update policy' });
+  }
+};
+
 module.exports = {
   createPolicy,
   getMyPolicy,
   pausePolicy,
+  resumePolicy,
+  updatePolicy,
   getPolicyHistory
 };

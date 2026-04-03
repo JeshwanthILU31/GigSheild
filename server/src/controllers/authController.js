@@ -64,7 +64,7 @@ const resendOtp = async (req, res) => {
     };
 
     if (process.env.NODE_ENV !== 'production') {
-      response.data.otp = result.otp;
+      response.otp = result.otp;
     }
 
     return res.status(200).json(response);

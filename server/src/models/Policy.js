@@ -16,7 +16,7 @@ const policySchema = new mongoose.Schema(
     premiumTier: {
       type: String,
       required: true,
-      enum: ['BASIC', 'STANDARD', 'PREMIUM']
+      enum: ['BASIC', 'STANDARD', 'PREMIUM', 'ULTRA']
     },
     coverageCap: {
       type: Number,
@@ -25,7 +25,7 @@ const policySchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['PENDING', 'ACTIVE', 'LAPSED', 'CANCELLED', 'EXPIRED'],
+      enum: ['PENDING', 'ACTIVE', 'PAUSED', 'LAPSED', 'CANCELLED', 'EXPIRED'],
       default: 'PENDING'
     },
     renewalDate: {

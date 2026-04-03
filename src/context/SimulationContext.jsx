@@ -1,32 +1,33 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import api from '../services/api';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import api from '../utils/axiosInstance';
 import { ENDPOINTS } from '../config/api';
 import { safeGetItem, safeParse, safeRemoveItems } from '../utils/storage';
 
 const SimulationContext = createContext();
 
 export const SimulationProvider = ({ children }) => {
-    // User State
+    const hasSynced = useRef(false);
+
     const [user, setUser] = useState(null);
     const [isRegistered, setIsRegistered] = useState(false);
     const [selectedRegions, setSelectedRegions] = useState([]);
 
-    // IoT Grid Simulation State
     const [rain, setRain] = useState(12);
     const [aqi, setAqi] = useState(156);
     const [temp, setTemp] = useState(32);
     const [platformStatus, setPlatformStatus] = useState('Online');
 
-    // Policy & Claims State
     const [plan, setPlan] = useState('Standard Protection');
-    const [policyStatus, setPolicyStatus] = useState('Inactive'); // Inactive, Active, Paused
+    const [policyStatus, setPolicyStatus] = useState('Inactive');
     const [totalPayouts, setTotalPayouts] = useState(0);
     const [weeklySaved, setWeeklySaved] = useState(0);
     const [payoutHistory, setPayoutHistory] = useState([]);
     const [activePolicy, setActivePolicy] = useState(null);
 
-    // Sync state with localStorage and backend
     useEffect(() => {
+        if (hasSynced.current) return;
+        hasSynced.current = true;
+
         const syncData = async () => {
             const parsedUser = safeParse('user');
             const token = safeGetItem('authToken');
@@ -34,8 +35,7 @@ export const SimulationProvider = ({ children }) => {
             if (parsedUser && token) {
                 setUser(parsedUser);
                 setIsRegistered(true);
-                
-                // Fetch policy info from backend
+
                 try {
                     const policyRes = await api.get(ENDPOINTS.POLICIES.ME);
                     if (policyRes.data) {
@@ -44,17 +44,20 @@ export const SimulationProvider = ({ children }) => {
                         setPlan(policyRes.data.planName || 'Standard Protection');
                     }
                 } catch (err) {
-                    console.warn('Could not fetch active policy, using local state');
+                    setActivePolicy(null);
+                    setPolicyStatus('Inactive');
                 }
 
-                // Fetch claims history
                 try {
                     const claimsRes = await api.get(ENDPOINTS.CLAIMS.ME);
-                    setPayoutHistory(claimsRes.data || []);
-                    const total = (claimsRes.data || []).reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                    const claims = Array.isArray(claimsRes.data) ? claimsRes.data
+                                 : Array.isArray(claimsRes.data?.claims) ? claimsRes.data.claims
+                                 : [];
+                    setPayoutHistory(claims);
+                    const total = claims.reduce((acc, c) => acc + (c.amount || 0), 0);
                     setTotalPayouts(total);
                 } catch (err) {
-                    console.warn('Could not fetch claims history');
+                    // silent
                 }
             } else {
                 safeRemoveItems('user', 'authToken');
@@ -64,10 +67,10 @@ export const SimulationProvider = ({ children }) => {
                 setTotalPayouts(0);
             }
         };
+
         syncData();
     }, []);
 
-    // Policy Actions
     const createPolicy = async (policyData) => {
         try {
             const response = await api.post(ENDPOINTS.POLICIES.CREATE, policyData);
@@ -76,6 +79,10 @@ export const SimulationProvider = ({ children }) => {
             setPlan(response.data.planName);
             return { success: true };
         } catch (error) {
+            // 409 = already exists, not a real failure
+            if (error.response?.status === 409) {
+                return { success: false, alreadyExists: true, error: 'Policy already exists' };
+            }
             return { success: false, error: error.response?.data?.message || 'Policy creation failed' };
         }
     };
@@ -90,11 +97,10 @@ export const SimulationProvider = ({ children }) => {
         }
     };
 
-    // Claims Actions
     const triggerClaim = async (claimParams) => {
         try {
             const response = await api.post(ENDPOINTS.CLAIMS.TRIGGER, claimParams);
-            setPayoutHistory([response.data, ...payoutHistory]);
+            setPayoutHistory(prev => [response.data, ...prev]);
             setTotalPayouts(prev => prev + (response.data.amount || 0));
             return { success: true, data: response.data };
         } catch (error) {

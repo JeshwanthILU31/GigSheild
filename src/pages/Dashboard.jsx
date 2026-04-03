@@ -1,381 +1,485 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  CloudRain, 
-  Wind, 
-  Thermometer, 
-  Zap, 
-  TrendingUp, 
-  CheckCircle2, 
-  AlertTriangle, 
-  PlayCircle,
-  Clock,
-  LogOut,
-  MapPin,
-  Shield,
-  ShieldAlert,
-  ChevronRight,
-  Loader2,
-  XCircle,
-  Pause,
-  Activity,
-  RefreshCw,
-  ArrowRight,
-  X,
-  Plus,
-  Crosshair,
-  History as HistoryIcon
-} from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, LogOut, RefreshCw, ShieldCheck, Crown } from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts';
 import { useSimulation } from '../context/SimulationContext';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useNavigate } from 'react-router-dom';
-import { safeGetItem } from '../utils/storage';
+import api from '../utils/axiosInstance';
+import { ENDPOINTS } from '../config/api';
+import DeliverabilityScoreSmall from '../components/dashboard/DeliverabilityScoreSmall';
+
+const WORKER_ME_ENDPOINT = '/api/workers/me';
+
+const INITIAL_DASHBOARD_STATE = {
+  worker: null,
+  policy: null,
+  claims: [],
+  loading: true,
+  historyEmpty: false
+};
+
+const normalizeClaims = (claimsPayload) => {
+  if (Array.isArray(claimsPayload)) return claimsPayload;
+  if (Array.isArray(claimsPayload?.claims)) return claimsPayload.claims;
+  if (Array.isArray(claimsPayload?.data)) return claimsPayload.data;
+  if (Array.isArray(claimsPayload?.data?.claims)) return claimsPayload.data.claims;
+  return [];
+};
+
+const normalizeObjectPayload = (payload) => {
+  if (!payload || Array.isArray(payload)) return null;
+  if (payload.data && !Array.isArray(payload.data)) return payload.data;
+  return payload;
+};
+
+const normalizePolicyHistory = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.data)) return payload.data.data;
+  return [];
+};
+
+const getPolicyStatusKey = (policy) =>
+  String(policy?.status || '').trim().toUpperCase();
+
+const formatStatusLabel = (status) => {
+  if (!status) return 'Inactive';
+  return String(status)
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const formatRenewalDate = (value) => {
+  if (value == null || value === '') return '—';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+const getErrorMessage = (error, fallbackMessage) => {
+  const status = error?.response?.status;
+
+  if (status === 409) {
+    return error?.response?.data?.message || 'A policy already exists for this account.';
+  }
+
+  if (status === 500) {
+    return error?.response?.data?.message || 'Something went wrong on the server. Please try again.';
+  }
+
+  if (!error?.response) {
+    return 'Network error. Please check your connection and try again.';
+  }
+
+  return error?.response?.data?.message || fallbackMessage;
+};
 
 const Dashboard = () => {
-    const navigate = useNavigate();
-    const { logout, user, setUser } = useAuth();
-    const { 
-        rain, aqi, temp, platformStatus,
-        plan, policyStatus, activePolicy,
-        totalPayouts, weeklySaved, payoutHistory,
-        createPolicy, pausePolicy, triggerClaim,
-        selectedRegions, setSelectedRegions
-    } = useSimulation();
+  const { logout, user } = useAuth();
+  const { plan } = useSimulation();
 
-    const [loading, setLoading] = useState({
-        coverage: false,
-        trigger: false,
-        regions: false
-    });
-    
-    const [nearbyZones, setNearbyZones] = useState([]);
-    const [showClaimModal, setShowClaimModal] = useState(false);
-    const [triggerResult, setTriggerResult] = useState(null);
+  const isMountedRef = useRef(true);
 
-    // Dynamic Region Generation based on Pincode
-    useEffect(() => {
-        const generateNearbyZones = () => {
-            const pincode = user?.pincode || safeGetItem('registrationPincode') || '560001';
-            const base = parseInt(pincode);
-            
-            // Generate some mock surrounding pincodes/zones
-            const zones = [
-                { id: 1, name: `Zone ${base - 1}`, pincode: `${base - 1}`, distance: '1.2 km' },
-                { id: 2, name: `Zone ${base}`, pincode: `${base}`, distance: '0.5 km' },
-                { id: 3, name: `Zone ${base + 1}`, pincode: `${base + 1}`, distance: '2.4 km' },
-                { id: 4, name: `Zone ${base + 2}`, pincode: `${base + 2}`, distance: '3.1 km' },
-            ];
-            setNearbyZones(zones);
-        };
-        generateNearbyZones();
-    }, [user?.pincode]);
+  const [dashboardState, setDashboardState] = useState(INITIAL_DASHBOARD_STATE);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState({ coverage: false });
+  const [actionError, setActionError] = useState('');
 
-    const handleToggleRegion = (zone) => {
-        if (selectedRegions.find(r => r.id === zone.id)) {
-            setSelectedRegions(selectedRegions.filter(r => r.id !== zone.id));
-        } else if (selectedRegions.length < 2) {
-            setSelectedRegions([...selectedRegions, zone]);
-        }
-    };
+  const fetchDashboardData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setDashboardState((prev) => ({ ...prev, loading: true }));
+    }
 
-    const handleActivateCoverage = async () => {
-        setLoading({ ...loading, coverage: true });
-        const res = await createPolicy({
-            planName: plan || 'Standard Protection',
-            pincode: user?.pincode,
-            regionCount: selectedRegions.length || 1
+    setRefreshing(true);
+    setActionError('');
+
+    try {
+      const [workerResult, claimsResult] = await Promise.allSettled([
+        api.get(WORKER_ME_ENDPOINT),
+        api.get(ENDPOINTS.CLAIMS.ME)
+      ]);
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      const nextWorker =
+        workerResult.status === 'fulfilled'
+          ? normalizeObjectPayload(workerResult.value?.data)
+          : null;
+
+      let nextClaims = [];
+      if (claimsResult.status === 'fulfilled') {
+        nextClaims = normalizeClaims(claimsResult.value?.data);
+      } else {
+        setActionError(getErrorMessage(claimsResult.reason, 'Unable to load claims.'));
+      }
+
+      if (workerResult.status === 'rejected') {
+        setActionError((prev) => prev || getErrorMessage(workerResult.reason, 'Unable to load worker details.'));
+      }
+
+      let nextPolicy = null;
+      let historyEmpty = false;
+
+      try {
+        const policyRes = await api.get(ENDPOINTS.POLICIES.ME, {
+          validateStatus: (status) => status === 200 || status === 404
         });
-        setLoading({ ...loading, coverage: false });
-        if (res.success) {
-            // Success feedback
+
+        if (!isMountedRef.current) {
+          return;
         }
-    };
 
-    const handlePauseOrResume = async () => {
-        setLoading({ ...loading, coverage: true });
-        await pausePolicy(); // This toggles in the backend logic or needs resume? User said Pause Policy button.
-        setLoading({ ...loading, coverage: false });
-    };
-
-    const handleTrigger = async (type) => {
-        setLoading({ ...loading, trigger: true });
-        setTriggerResult(null);
-        const res = await triggerClaim({
-            type,
-            pincode: user?.pincode,
-            value: type === 'rain' ? 45 : type === 'aqi' ? 320 : 45 // Simulated thresholds
-        });
-        setLoading({ ...loading, trigger: false });
-        if (res.success) {
-            setTriggerResult({ success: true, message: `Payout of ₹${res.data.amount} initiated!` });
-        } else {
-            setTriggerResult({ success: false, message: res.error });
+        if (policyRes.status === 200) {
+          nextPolicy = normalizeObjectPayload(policyRes.data);
+        } else if (policyRes.status === 404) {
+          try {
+            const historyResponse = await api.get(ENDPOINTS.POLICIES.HISTORY);
+            const historyList = normalizePolicyHistory(historyResponse?.data);
+            historyEmpty = historyList.length === 0;
+            nextPolicy = historyResponse?.data?.data?.[0] ?? historyList[0] ?? null;
+          } catch (historyError) {
+            setActionError((prev) => prev || getErrorMessage(historyError, 'Unable to load policy history.'));
+            historyEmpty = false;
+            nextPolicy = null;
+          }
         }
-    };
+      } catch (policyError) {
+        setActionError((prev) => prev || getErrorMessage(policyError, 'Unable to load policy details.'));
+      }
 
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Good morning';
-        if (hour < 17) return 'Good afternoon';
-        return 'Good evening';
-    };
+      if (!isMountedRef.current) {
+        return;
+      }
 
+      setDashboardState({
+        worker: nextWorker,
+        policy: nextPolicy,
+        claims: nextClaims,
+        loading: false,
+        historyEmpty
+      });
+    } finally {
+      if (isMountedRef.current) {
+        setRefreshing(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    fetchDashboardData();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchDashboardData]);
+
+  useEffect(() => {
+    const onExternalRefresh = () => {
+      fetchDashboardData({ silent: true });
+    };
+    window.addEventListener('gigshield:dashboard-refresh', onExternalRefresh);
+    return () => window.removeEventListener('gigshield:dashboard-refresh', onExternalRefresh);
+  }, [fetchDashboardData]);
+
+  const settledAmount = useMemo(() => {
+    return Array.isArray(dashboardState.claims) && dashboardState.claims.length > 0
+      ? dashboardState.claims.reduce((sum, claim) => sum + Number(claim?.amount || 0), 0)
+      : 6700;
+  }, [dashboardState.claims]);
+
+  const chartData = useMemo(() => {
+    const claims = dashboardState.claims;
+    if (!Array.isArray(claims) || claims.length === 0) {
+      return [
+        { name: 'Sep', amount: 1250 },
+        { name: 'Oct', amount: 800 },
+        { name: 'Nov', amount: 2400 },
+        { name: 'Dec', amount: 450 },
+        { name: 'Jan', amount: 1800 }
+      ];
+    }
+    return claims.map((claim, index) => ({
+      name: `Claim ${index + 1}`,
+      amount: Number(claim?.amount) || 0
+    }));
+  }, [dashboardState.claims]);
+
+  const policyStatus = getPolicyStatusKey(dashboardState.policy);
+  const shouldShowCreate = dashboardState.historyEmpty;
+  const shouldShowPause = policyStatus === 'ACTIVE';
+  const shouldShowResume = policyStatus === 'PAUSED';
+
+  const handleActivateCoverage = async () => {
+    setLoading((prev) => ({ ...prev, coverage: true }));
+    setActionError('');
+
+    try {
+      await api.post(ENDPOINTS.POLICIES.CREATE, {
+        planName: dashboardState.policy?.planName || plan || 'Standard Protection',
+        pincode: dashboardState.worker?.pinCode || user?.pincode
+      });
+
+      await fetchDashboardData({ silent: true });
+    } catch (error) {
+      setActionError(getErrorMessage(error, 'Policy creation failed.'));
+      setLoading((prev) => ({ ...prev, coverage: false }));
+      return;
+    }
+
+    if (isMountedRef.current) {
+      setLoading((prev) => ({ ...prev, coverage: false }));
+    }
+  };
+
+  const handlePauseOrResume = async () => {
+    setLoading((prev) => ({ ...prev, coverage: true }));
+    setActionError('');
+
+    try {
+      const endpoint = shouldShowPause ? ENDPOINTS.POLICIES.PAUSE : ENDPOINTS.POLICIES.RESUME;
+      await api.put(endpoint);
+      await fetchDashboardData({ silent: true });
+    } catch (error) {
+      setActionError(getErrorMessage(error, 'Unable to update policy status.'));
+      setLoading((prev) => ({ ...prev, coverage: false }));
+      return;
+    }
+
+    if (isMountedRef.current) {
+      setLoading((prev) => ({ ...prev, coverage: false }));
+    }
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  const premiumTier =
+    dashboardState.policy?.premiumTier ?? dashboardState.policy?.tier ?? 'Standard';
+
+  if (dashboardState.loading) {
     return (
-        <div className="space-y-8 py-6 pb-20 relative text-slate-900 dark:text-white transition-colors">
-            {/* Header */}
-            <header className="flex flex-col md:flex-row items-center justify-between gap-6 bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 blur-[80px] rounded-full -translate-y-1/2 translate-x-1/4 -z-0 pointer-events-none" />
-                
-                <div className="flex items-center gap-6 relative z-10 cursor-pointer group" onClick={() => navigate('/dashboard/profile')}>
-                    <div className="w-16 h-16 rounded-3xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand text-2xl font-black">
-                        {user?.name?.[0] || 'P'}
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-                            {getGreeting()}, <span className="text-brand">{user?.name?.split(' ')[0] || 'Partner'}</span>
-                        </h1>
-                        <div className="flex items-center gap-2 mt-1">
-                            <div className="px-3 py-1 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center gap-2 border border-slate-100 dark:border-slate-700">
-                                <MapPin size={12} className="text-slate-400" />
-                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                                   {user?.pincode} • {selectedRegions.length || 1} Region Protected
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center gap-3">
+          <Loader2 className="animate-spin text-brand" size={28} />
+          <p className="text-slate-500 font-medium">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
-                <div className="flex gap-3 relative z-10">
-                    <button 
-                        onClick={() => setShowClaimModal(true)}
-                        className="bg-brand text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-brand/20 hover:-translate-y-1 transition-all flex items-center gap-2"
-                    >
-                        <Zap size={18} />
-                        Trigger Claim
-                    </button>
-                    <button onClick={logout} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 text-slate-400 hover:text-rose-500 transition-all">
-                        <LogOut size={20} />
-                    </button>
-                </div>
-            </header>
+  return (
+    <div className="space-y-8 py-6 pb-20 relative max-w-7xl mx-auto">
+      <header className="relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 bg-slate-900 p-10 md:p-12 rounded-[3.5rem] shadow-2xl">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand/20 blur-[100px] rounded-full translate-x-1/3 -translate-y-1/2" />
+        <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-orange-500/10 blur-[80px] rounded-full -translate-x-1/2 translate-y-1/2" />
+        
+        <div className="relative z-10 flex flex-col space-y-5 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-3">
+             <div className="px-4 py-2 bg-brand/20 border border-brand/30 rounded-2xl flex items-center gap-2 shadow-lg shadow-brand/10">
+                 <Crown size={16} className="text-brand drop-shadow-md" />
+                 <span className="text-xs font-black text-brand uppercase tracking-widest">{premiumTier} Holder</span>
+             </div>
+             <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 shadow-lg ${policyStatus === 'ACTIVE' ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 shadow-emerald-500/10' : 'bg-slate-800 border border-slate-700 text-slate-400'}`}>
+                 <ShieldCheck size={16} />
+                 <span className="text-xs font-black uppercase tracking-widest">{formatStatusLabel(dashboardState.policy?.status)} Policy</span>
+             </div>
+          </div>
+          
+          <h1 className="text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
+            {getGreeting()},<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand to-orange-400">
+              {dashboardState.worker?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Partner'}
+            </span>
+          </h1>
+          <p className="text-slate-400 flex items-center gap-2 text-lg font-medium italic">
+            "Don't worry, we're with you in tough times."
+          </p>
+        </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Left Column */}
-                <div className="lg:col-span-8 space-y-8">
-                    
-                    {/* Policy Card */}
-                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[3rem] p-10 shadow-2xl relative overflow-hidden">
-                         <div className="flex items-center justify-between mb-12">
-                            <div className="flex items-center gap-6">
-                                <div className={`w-16 h-16 rounded-3xl ${policyStatus === 'Active' ? 'bg-brand/5 text-brand' : 'bg-slate-50 text-slate-400'} flex items-center justify-center border border-current/10`}>
-                                    <Shield size={32} />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">{plan}</h3>
-                                    <div className={`mt-1 px-3 py-1 rounded-full text-[9px] font-black tracking-[0.2em] uppercase border inline-flex items-center gap-2 ${policyStatus === 'Active' ? 'bg-brand/5 text-brand border-brand/10' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
-                                        <div className={`w-1.5 h-1.5 rounded-full ${policyStatus === 'Active' ? 'bg-brand animate-pulse' : 'bg-slate-300'}`} />
-                                        {policyStatus}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div className="flex gap-3">
-                                {policyStatus === 'Inactive' ? (
-                                    <button onClick={handleActivateCoverage} disabled={loading.coverage} className="btn-primary">
-                                       {loading.coverage ? <Loader2 className="animate-spin" /> : 'Create Policy'}
-                                    </button>
-                                ) : (
-                                    <button onClick={handlePauseOrResume} disabled={loading.coverage} className="px-6 py-3 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-2xl border border-slate-100 dark:border-slate-700 hover:bg-slate-100 transition-all">
-                                        {loading.coverage ? <Loader2 size={16} className="animate-spin" /> : policyStatus === 'Active' ? 'Pause Policy' : 'Resume'}
-                                    </button>
-                                )}
-                            </div>
-                         </div>
+        <div className="relative z-10 flex gap-4 w-full md:w-auto justify-end">
+          <button
+            onClick={() => fetchDashboardData({ silent: true })}
+            className="p-5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-white backdrop-blur-md shadow-xl hover:scale-105"
+          >
+            <RefreshCw size={22} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+          <button
+            onClick={logout}
+            className="p-5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all text-rose-400 backdrop-blur-md shadow-xl hover:scale-105"
+          >
+            <LogOut size={22} />
+          </button>
+        </div>
+      </header>
 
-                         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-                            {[
-                                { label: 'Weekly Premium', value: activePolicy?.weeklyPremium ? `₹${activePolicy.weeklyPremium}` : '₹79', icon: TrendingUp },
-                                { label: 'Coverage Cap', value: activePolicy?.coverageCap ? `₹${activePolicy.coverageCap}` : '₹1,500', icon: Shield },
-                                { label: 'Tier', value: activePolicy?.tier || 'Standard', icon: Zap },
-                                { label: 'Settled', value: `₹${totalPayouts}`, icon: CheckCircle2 },
-                            ].map((stat, i) => (
-                                <div key={i} className="space-y-1">
-                                    <div className="flex items-center gap-2 text-slate-400">
-                                        <stat.icon size={10} />
-                                        <span className="text-[9px] font-black uppercase tracking-wider">{stat.label}</span>
-                                    </div>
-                                    <div className="text-xl font-black text-slate-800 dark:text-white tracking-tight">{stat.value}</div>
-                                </div>
-                            ))}
-                         </div>
-                    </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-8 space-y-8">
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl">
+            <div className="flex justify-between mb-10">
+              <div>
+                <h3 className="text-2xl font-black">
+                  {dashboardState.policy?.planName || plan}
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {formatStatusLabel(dashboardState.policy?.status)}
+                </p>
+              </div>
 
-                    {/* Location Management */}
-                    <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] p-8">
-                         <div className="flex items-center justify-between mb-8">
-                             <div>
-                                <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Location Monitoring</h3>
-                                <p className="text-xs text-slate-400 font-bold uppercase mt-1">Select up to 2 zones for protection</p>
-                             </div>
-                             <div className="px-4 py-2 bg-brand/10 text-brand rounded-xl text-[10px] font-black uppercase">
-                                {selectedRegions.length}/2 Selected
-                             </div>
-                         </div>
-
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             {nearbyZones.map(zone => (
-                                 <button
-                                    key={zone.id}
-                                    onClick={() => handleToggleRegion(zone)}
-                                    className={`p-6 rounded-[2rem] border-2 transition-all text-left flex items-center justify-between group ${
-                                        selectedRegions.find(r => r.id === zone.id)
-                                        ? 'bg-brand/5 border-brand shadow-lg shadow-brand/5'
-                                        : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-brand/20'
-                                    }`}
-                                 >
-                                    <div className="flex items-center gap-5">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${
-                                            selectedRegions.find(r => r.id === zone.id) ? 'bg-brand text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:text-brand'
-                                        }`}>
-                                            <MapPin size={24} />
-                                        </div>
-                                        <div>
-                                            <p className={`font-black text-lg ${selectedRegions.find(r => r.id === zone.id) ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{zone.name}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{zone.pincode} • {zone.distance}</p>
-                                        </div>
-                                    </div>
-                                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${
-                                        selectedRegions.find(r => r.id === zone.id) ? 'bg-brand border-brand text-white' : 'border-slate-200 dark:border-slate-700'
-                                    }`}>
-                                        {selectedRegions.find(r => r.id === zone.id) ? <CheckCircle2 size={16} /> : <Plus size={16} />}
-                                    </div>
-                                 </button>
-                             ))}
-                         </div>
-                    </div>
-                </div>
-
-                {/* Right Column - History */}
-                <div className="lg:col-span-4">
-                     <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[3rem] p-10 shadow-2xl h-full relative overflow-hidden">
-                        <div className="flex items-center justify-between mb-10">
-                            <h3 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Claims History</h3>
-                            <div className="w-8 h-8 bg-slate-50 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400">
-                                <HistoryIcon size={16} />
-                            </div>
-                        </div>
-
-                        <div className="space-y-6">
-                            {payoutHistory.length === 0 ? (
-                                <div className="text-center py-20 opacity-30">
-                                    <Activity className="mx-auto mb-4" size={40} />
-                                    <p className="text-xs font-bold uppercase tracking-widest">No claims yet</p>
-                                </div>
-                            ) : payoutHistory.map((claim, idx) => (
-                                <motion.div 
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    key={idx} 
-                                    className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 group hover:border-brand/30 transition-all"
-                                >
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center text-brand">
-                                                <Zap size={14} />
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-black text-slate-900 dark:text-white uppercase leading-none">{claim.disruptionType || claim.type || 'Weather Disruption'}</p>
-                                                <p className="text-[10px] text-slate-400 font-bold mt-1">{new Date(claim.createdAt || claim.date).toLocaleDateString()}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-black text-brand tracking-tight">₹{claim.amount}</p>
-                                            <p className="text-[8px] text-green-500 font-black uppercase tracking-widest">{claim.status || 'Paid'}</p>
-                                        </div>
-                                    </div>
-                                    <p className="text-[10px] text-slate-500 leading-relaxed line-clamp-1 italic">"{claim.reason || 'Threshold exceeded in protected zone'}"</p>
-                                </motion.div>
-                            ))}
-                        </div>
-                     </div>
-                </div>
+              {(shouldShowCreate || shouldShowPause || shouldShowResume) && (
+                <button
+                  onClick={shouldShowCreate ? handleActivateCoverage : handlePauseOrResume}
+                  disabled={loading.coverage}
+                  className="px-6 py-3 rounded-2xl border hover:bg-slate-50 transition flex items-center gap-2"
+                >
+                  {loading.coverage ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} /> Processing...
+                    </>
+                  ) : shouldShowPause ? (
+                    'Pause Policy'
+                  ) : shouldShowResume ? (
+                    'Resume Policy'
+                  ) : (
+                    'Create Policy'
+                  )}
+                </button>
+              )}
             </div>
 
-            {/* Trigger Claim Modal */}
-            <AnimatePresence>
-                {showClaimModal && (
-                    <motion.div 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md"
-                    >
-                        <motion.div 
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-lg p-10 relative overflow-hidden"
-                        >
-                            <button onClick={() => setShowClaimModal(false)} className="absolute top-8 right-8 text-slate-400 hover:text-brand">
-                                <X size={24} />
-                            </button>
+            {actionError && (
+              <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                {actionError}
+              </div>
+            )}
 
-                            <div className="mb-10">
-                                <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Trigger <span className="text-brand">GigShield</span></h2>
-                                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">Demo Simulation Mode</p>
-                            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-8">
+              <div>
+                <p className="text-sm text-slate-500">Weekly Premium</p>
+                <h2 className="text-xl font-black mt-1">
+                  ₹{dashboardState.policy?.weeklyPremium ?? 79}
+                </h2>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Coverage Cap</p>
+                <h2 className="text-xl font-black mt-1">
+                  ₹{dashboardState.policy?.coverageCap ?? 1500}
+                </h2>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Premium Tier</p>
+                <h2 className="text-xl font-black mt-1">{premiumTier}</h2>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Status</p>
+                <h2 className="text-xl font-black mt-1">
+                  {formatStatusLabel(dashboardState.policy?.status)}
+                </h2>
+              </div>
+              <div className="col-span-2 md:col-span-1 xl:col-span-1">
+                <p className="text-sm text-slate-500">Renewal Date</p>
+                <h2 className="text-xl font-black mt-1">
+                  {formatRenewalDate(dashboardState.policy?.renewalDate)}
+                </h2>
+              </div>
+            </div>
+          </div>
 
-                            {triggerResult ? (
-                                <div className="text-center py-10 space-y-6">
-                                    <div className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center ${triggerResult.success ? 'bg-green-100 text-green-600' : 'bg-rose-100 text-rose-600'}`}>
-                                        {triggerResult.success ? <CheckCircle2 size={40} /> : <XCircle size={40} />}
-                                    </div>
-                                    <div>
-                                        <p className="text-xl font-bold text-slate-900 dark:text-white">{triggerResult.success ? 'System Success' : 'Threshold Not Met'}</p>
-                                        <p className="text-slate-500 text-sm mt-1">{triggerResult.message}</p>
-                                    </div>
-                                    <button onClick={() => { setShowClaimModal(false); setTriggerResult(null); }} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold">Done</button>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Select disruption type</p>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {[
-                                            { id: 'rain', name: 'Heavy Rain', icon: CloudRain, threshold: '40mm' },
-                                            { id: 'aqi', name: 'Extreme AQI', icon: Wind, threshold: '300' },
-                                            { id: 'heat', name: 'Extreme Heat', icon: Thermometer, threshold: '44°C' },
-                                            { id: 'downtime', name: 'App Downtime', icon: Activity, threshold: 'Offline' },
-                                        ].map(opt => (
-                                            <button 
-                                                key={opt.id}
-                                                onClick={() => handleTrigger(opt.id)}
-                                                disabled={loading.trigger}
-                                                className="p-6 rounded-3xl border-2 border-slate-100 dark:border-slate-800 hover:border-brand/40 bg-white dark:bg-slate-900 transition-all text-left flex flex-col gap-4 group"
-                                            >
-                                                <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-brand">
-                                                    <opt.icon size={20} />
-                                                </div>
-                                                <div>
-                                                    <p className="font-black text-slate-900 dark:text-white uppercase text-[10px] tracking-widest">{opt.name}</p>
-                                                    <p className="text-[10px] text-slate-400 font-bold mt-1">Cap: {opt.threshold}</p>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {loading.trigger && (
-                                <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
-                                    <div className="w-12 h-12 border-4 border-brand border-t-transparent rounded-full animate-spin" />
-                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand">Verifying Environmental Data</p>
-                                </div>
-                            )}
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl">
+            <h3 className="font-black mb-6 text-lg">Claims analytics</h3>
+            <p className="text-sm text-slate-500 mb-6">Settlement amounts per claim</p>
+            <div className="h-[280px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                  <defs>
+                    <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#94a3b8" axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" axisLine={false} tickLine={false} />
+                  <Tooltip
+                    formatter={(value) => [`₹${value}`, 'Amount']}
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Area 
+                     type="monotone" 
+                     dataKey="amount" 
+                     stroke="#6366f1" 
+                     strokeWidth={3} 
+                     fillOpacity={1} 
+                     fill="url(#colorAmount)" 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
-    );
+
+        <div className="lg:col-span-4">
+          <DeliverabilityScoreSmall />
+          
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl">
+            <h3 className="font-black mb-2 text-lg">Claims History</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Total settled: <span className="text-brand font-black">₹{settledAmount}</span>
+            </p>
+            {dashboardState.claims.length === 0 ? (
+              <div className="space-y-4 max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 border-b border-slate-100 pb-2">Demo Coverage Data</p>
+                {[
+                  { type: 'Heavy Rainfall Payout (HITEC City)', amount: 1800, date: '12 Jan 2026' },
+                  { type: 'AQI Hazard (Bandra Zone)', amount: 450, date: '04 Dec 2025' },
+                  { type: 'Heatwave Parametric Trigger', amount: 2400, date: '18 Nov 2025' },
+                  { type: 'Platform Outage Compensation', amount: 800, date: '22 Oct 2025' },
+                  { type: 'Minor Rain Disruption', amount: 1250, date: '15 Sep 2025' }
+                ].map((claim, idx) => (
+                  <div key={idx} className="p-4 rounded-2xl border border-slate-100 hover:shadow-md transition-all bg-slate-50 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-brand/5 blur-xl rounded-full group-hover:bg-brand/10 transition-colors" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{claim.date}</p>
+                    <p className="font-bold text-slate-900 leading-tight mb-3 relative z-10 pr-2">{claim.type}</p>
+                    <div className="inline-block px-3 py-1 bg-brand/10 rounded-full">
+                        <p className="text-brand font-black text-sm relative z-10">₹{claim.amount}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
+                {dashboardState.claims.map((claim, idx) => (
+                  <div key={idx} className="p-4 rounded-2xl border mb-4 bg-slate-50 hover:shadow-md transition-all">
+                    <p className="font-bold text-slate-900 leading-tight mb-2">{claim.type || claim.disruptionType}</p>
+                    <div className="inline-block px-3 py-1 bg-brand/10 rounded-full">
+                        <p className="text-brand font-black text-sm">₹{claim.amount}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Dashboard;

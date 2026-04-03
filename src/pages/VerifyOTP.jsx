@@ -60,7 +60,7 @@ const VerifyOtp = () => {
             const result = await verifyOtp({ email, otp: otpValue });
             if (result.success) {
                 safeRemoveItems('isNewRegistration', 'pendingRegistrationData');
-                navigate('/dashboard');
+                navigate('/dashboard/select-location');
             } else {
                 setError(result.error || result.data?.message || 'OTP verification failed');
             }

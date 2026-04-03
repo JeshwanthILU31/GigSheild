@@ -146,7 +146,7 @@ export const AuthProvider = ({ children }) => {
 
     const resendOtp = async (registrationData) => {
         try {
-            const response = await api.post(ENDPOINTS.AUTH.REGISTER, registrationData);
+            const response = await api.post(ENDPOINTS.AUTH.RESEND_OTP, { email: registrationData.email });
 
             if (registrationData?.pinCode) {
                 safeSetItem('registrationPincode', registrationData.pinCode);

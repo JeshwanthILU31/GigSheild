@@ -12,8 +12,11 @@ import { useLocation } from 'react-router-dom';
 
 const LayoutWrapper = () => {
   const location = useLocation();
-  // Hide Navbar/Footer on Dashboard routes
-  const isDashboard = location.pathname.startsWith('/dashboard');
+  const isDashboardRoute = location.pathname.startsWith('/dashboard');
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  
+  const hideNavbar = isDashboardRoute || isAdminRoute;
+  const hideFooter = isDashboardRoute;
 
   React.useEffect(() => {
     if (location.hash) {
@@ -32,7 +35,7 @@ const LayoutWrapper = () => {
 
   return (
     <div className="min-h-screen bg-white text-slate-800 flex flex-col font-sans relative">
-      {!isDashboard && <Navbar />}
+      {!hideNavbar && <Navbar />}
       
       <main className="flex-grow">
         <AppErrorBoundary resetKey={location.pathname}>
@@ -40,7 +43,7 @@ const LayoutWrapper = () => {
         </AppErrorBoundary>
       </main>
       
-      {!isDashboard && !isAuthPage && (
+      {!hideFooter && !isAuthPage && (
         <>
             <Footer />
             <BackToTop />
