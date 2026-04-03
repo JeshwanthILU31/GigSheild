@@ -4,18 +4,20 @@ import { motion } from 'framer-motion';
 import { Shield, ArrowRight, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { safeGetItem, safeParse, safeRemoveItems } from '../utils/storage';
 
 const VerifyOtp = () => {
     const navigate = useNavigate();
-    const { verifyOtp, resendOtp, login } = useAuth();
+    const { verifyOtp, resendOtp } = useAuth();
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [email, setEmail] = useState('');
     const [error, setError] = useState('');
+    const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
     const inputRefs = useRef([]);
 
     useEffect(() => {
-        const storedEmail = localStorage.getItem('userEmail');
+        const storedEmail = safeGetItem('userEmail');
         if (!storedEmail) {
             navigate('/register');
         } else {
@@ -52,36 +54,42 @@ const VerifyOtp = () => {
 
         setLoading(true);
         setError('');
+        setMessage('');
 
         try {
             const result = await verifyOtp({ email, otp: otpValue });
-            if (result.success || true) { // Allow mock success for demo
-                // Auto-login after successful verification
-                const loginResult = await login({ email, password: 'auto-login' });
-                if (loginResult.success) {
-                    navigate('/dashboard');
-                } else {
-                    // Fallback to direct navigation if login fails but verification was okay
-                    navigate('/dashboard');
-                }
+            if (result.success) {
+                safeRemoveItems('isNewRegistration', 'pendingRegistrationData');
+                navigate('/dashboard/select-location');
+            } else {
+                setError(result.error || result.data?.message || 'OTP verification failed');
             }
         } catch (err) {
-            setError('Something went wrong. Please check your connection.');
+            setError(err.response?.data?.message || 'Something went wrong. Please check your connection.');
         } finally {
             setLoading(false);
         }
     };
 
     const handleResend = async () => {
+        setError('');
+        setMessage('');
+        const pendingRegistrationData = safeParse('pendingRegistrationData');
+
+        if (!pendingRegistrationData) {
+            setError('Registration details are missing. Please register again.');
+            return;
+        }
+
         try {
-            const result = await resendOtp(email);
+            const result = await resendOtp(pendingRegistrationData);
             if (result.success) {
-                alert('OTP sent successfully!');
+                setMessage(result.data?.message || 'OTP sent successfully.');
             } else {
-                alert('Failed to resend OTP. Try again later.');
+                setError(result.error || result.data?.message || 'Failed to resend OTP.');
             }
         } catch (err) {
-            console.error('Error resending OTP:', err);
+            setError(err.response?.data?.message || 'Failed to resend OTP.');
         }
     };
 
@@ -124,6 +132,12 @@ const VerifyOtp = () => {
                     {error && (
                         <p className="text-sm font-bold text-rose-500 text-center uppercase tracking-widest bg-rose-50 p-4 rounded-2xl border border-rose-100">
                             {error}
+                        </p>
+                    )}
+
+                    {message && (
+                        <p className="text-sm font-bold text-emerald-600 text-center uppercase tracking-widest bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
+                            {message}
                         </p>
                     )}
 

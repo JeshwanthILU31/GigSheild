@@ -16,16 +16,36 @@ import AdminProtectedRoute from '../components/AdminProtectedRoute';
 import HistoryPage from '../pages/HistoryPage';
 import SettingsPage from '../pages/SettingsPage';
 import PlanSelection from '../pages/PlanSelection';
+<<<<<<< HEAD
 import ProfilePage from '../pages/ProfilePage';
 import AdminLogin from '../pages/AdminLogin';
 import AdminDashboard from '../pages/Admin';
 
 const AppRoutes = () => {
+=======
+import LocationSelection from '../pages/LocationSelection';
+import BillingPage from '../pages/BillingPage';
+
+import ProfilePage from '../pages/ProfilePage';
+import AdminLogin from '../pages/AdminLogin';
+import AdminDashboard from '../pages/Admin';
+import { safeGetItem } from '../utils/storage';
+
+const AppRoutes = () => {
+    const { isRegistered } = useSimulation();
+    const { isAuthenticated } = useAuth();
+    const isAdmin = safeGetItem('adminToken') === 'mock-admin-session';
+
+    // Bridge for transition: consider user authenticated if either context says so
+    const isUserAuthenticated = isAuthenticated || isRegistered;
+
+>>>>>>> 86766f9345e54c39e89819d4ef53aab8b1976759
     return (
         <Routes>
             {/* Public/Guest Routes - Wrapped in PublicRoute to redirect away if already logged in */}
             <Route 
                 path="/" 
+<<<<<<< HEAD
                 element={
                     <PublicRoute>
                         <Home />
@@ -55,6 +75,9 @@ const AppRoutes = () => {
                         <LoginPage />
                     </PublicRoute>
                 } 
+=======
+                element={<Home />} 
+>>>>>>> 86766f9345e54c39e89819d4ef53aab8b1976759
             />
             
             {/* Admin Routes - Separately protected for administrative access */}
@@ -79,7 +102,9 @@ const AppRoutes = () => {
             >
                 <Route index element={<Dashboard />} />
                 <Route path="select-plan" element={<PlanSelection />} />
+                <Route path="select-location" element={<LocationSelection />} />
                 <Route path="policy" element={<Policy />} />
+                <Route path="billing" element={<BillingPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="history" element={<HistoryPage />} />
                 <Route path="settings" element={<SettingsPage />} />

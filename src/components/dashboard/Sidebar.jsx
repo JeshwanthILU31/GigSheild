@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
-import { Shield, LayoutDashboard, FileText, Settings, LogOut, History, User } from 'lucide-react';
+import { Shield, LayoutDashboard, FileText, Settings, LogOut, History as HistoryIcon, User, CreditCard } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSimulation } from '../../context/SimulationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -13,15 +13,18 @@ const Sidebar = () => {
     const { user, logout } = useAuth();
     
     const handleLogout = () => {
-        logout();
         setIsRegistered(false);
         navigate('/');
+        setTimeout(() => {
+            logout();
+        }, 10);
     };
 
     const navItems = [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
         { name: 'Policy Details', path: '/dashboard/policy', icon: FileText },
-        { name: 'Payout History', path: '/dashboard/history', icon: History },
+        { name: 'Payout History', path: '/dashboard/history', icon: HistoryIcon },
+        { name: 'Billing, Pay', path: '/dashboard/billing', icon: CreditCard },
         { name: 'Settings', path: '/dashboard/settings', icon: Settings },
     ];
 

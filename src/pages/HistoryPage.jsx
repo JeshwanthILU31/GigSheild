@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { History, ArrowUpRight, CheckCircle2, Clock, Calendar, ShieldCheck, Filter } from 'lucide-react';
+import { History as HistoryIcon, ArrowUpRight, CheckCircle2, Clock, Calendar, ShieldCheck, Filter } from 'lucide-react';
 import { useSimulation } from '../context/SimulationContext';
 
 const HistoryPage = () => {
@@ -83,7 +83,7 @@ const HistoryPage = () => {
                                     <td className="px-10 py-8">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-brand/10 group-hover:text-brand transition-all">
-                                                <History size={14} />
+                                                <HistoryIcon size={14} />
                                             </div>
                                             <span className="text-sm font-bold text-slate-600 dark:text-slate-300">{item.reason}</span>
                                         </div>

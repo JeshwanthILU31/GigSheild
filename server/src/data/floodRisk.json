@@ -1,0 +1,74 @@
+{
+  "500001-500050": {
+    "city": "Hyderabad",
+    "riskScore": 0.58
+  },
+  "500051-500100": {
+    "city": "Hyderabad",
+    "riskScore": 0.42
+  },
+  "500101-500150": {
+    "city": "Hyderabad",
+    "riskScore": 0.31
+  },
+  "400001-400050": {
+    "city": "Mumbai",
+    "riskScore": 0.9
+  },
+  "400051-400100": {
+    "city": "Mumbai",
+    "riskScore": 0.82
+  },
+  "400101-400150": {
+    "city": "Mumbai",
+    "riskScore": 0.68
+  },
+  "110001-110050": {
+    "city": "Delhi",
+    "riskScore": 0.46
+  },
+  "110051-110100": {
+    "city": "Delhi",
+    "riskScore": 0.38
+  },
+  "110101-110150": {
+    "city": "Delhi",
+    "riskScore": 0.29
+  },
+  "600001-600050": {
+    "city": "Chennai",
+    "riskScore": 0.88
+  },
+  "600051-600100": {
+    "city": "Chennai",
+    "riskScore": 0.76
+  },
+  "600101-600150": {
+    "city": "Chennai",
+    "riskScore": 0.61
+  },
+  "560001-560050": {
+    "city": "Bangalore",
+    "riskScore": 0.4
+  },
+  "560051-560100": {
+    "city": "Bangalore",
+    "riskScore": 0.33
+  },
+  "560101-560150": {
+    "city": "Bangalore",
+    "riskScore": 0.24
+  },
+  "700001-700050": {
+    "city": "Kolkata",
+    "riskScore": 0.84
+  },
+  "700051-700100": {
+    "city": "Kolkata",
+    "riskScore": 0.72
+  },
+  "700101-700150": {
+    "city": "Kolkata",
+    "riskScore": 0.55
+  }
+}

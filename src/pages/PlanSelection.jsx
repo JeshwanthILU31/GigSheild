@@ -17,11 +17,17 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useSimulation } from '../context/SimulationContext';
-import { useAuth } from '../context/AuthContext.jsx';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { safeGetItem } from '../utils/storage';
+import api from '../utils/axiosInstance';
+import { ENDPOINTS } from '../config/api';
+import { useAuth } from '../context/AuthContext';
 
 const PlanSelection = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const isUpgradeMode = location.state?.isUpgrade || false;
+    const currentTier = location.state?.currentTier || null;
     const { user } = useAuth();
     const { 
         rain, aqi, temp, 
@@ -34,9 +40,16 @@ const PlanSelection = () => {
     const [step, setStep] = useState('selection');
     const [error, setError] = useState(null);
 
+    const activeZone = safeGetItem('activeZone') || 'Generic Zone';
+
     // Dynamic premium calculation 
     const basePremium = 49;
-    const weatherRisk = (rain * 1.5) + (aqi / 15) + (temp > 35 ? 15 : 0);
+    
+    // Add additional zone-based historical risk logic for heavy rainfall areas
+    const highRiskZones = ['Madhapur', 'Bandra', 'Koramangala', 'Connaught Place'];
+    const zoneRiskMultiplier = highRiskZones.includes(activeZone) ? 1.25 : 1.0;
+    
+    const weatherRisk = ((rain * 1.5) + (aqi / 15) + (temp > 35 ? 15 : 0)) * zoneRiskMultiplier;
     const dynamicPremium = Math.round(basePremium + weatherRisk);
 
     const plans = [
@@ -76,14 +89,38 @@ const PlanSelection = () => {
         setIsProcessing(true);
         setError(null);
 
-        // Integration with backend
-        const res = await createPolicy({
-            planName: selectedPlan.name,
-            weeklyPremium: selectedPlan.price,
-            coverageCap: parseInt(selectedPlan.coverage.replace('₹', '').replace(',', '')),
-            tier: selectedPlan.id,
-            pincode: user?.pincode || localStorage.getItem('registrationPincode')
-        });
+        // Handle payment demo flow transition before hitting logic
+        setStep('demo-payment');
+    };
+
+    const confirmPaymentDemo = async () => {
+        setIsProcessing(true);
+        setError(null);
+        setStep('processing-payment');
+        
+        let res;
+        try {
+             if (isUpgradeMode) {
+                 const reqBody = {
+                     planName: selectedPlan.name,
+                     weeklyPremium: selectedPlan.price,
+                     coverageCap: parseInt(selectedPlan.coverage.replace('₹', '').replace(',', '')),
+                     tier: selectedPlan.id
+                 };
+                 const axiosRes = await api.put(ENDPOINTS.POLICIES.UPDATE, reqBody);
+                 res = { success: true, data: axiosRes.data };
+             } else {
+                 res = await createPolicy({
+                     planName: selectedPlan.name,
+                     weeklyPremium: selectedPlan.price,
+                     coverageCap: parseInt(selectedPlan.coverage.replace('₹', '').replace(',', '')),
+                     tier: selectedPlan.id,
+                     pincode: user?.pincode || safeGetItem('registrationPincode')
+                 });
+             }
+        } catch (e) {
+             res = { success: false, error: e.response?.data?.message || 'Transaction failed' };
+        }
 
         if (res.success) {
             setPlan(selectedPlan.name);
@@ -128,7 +165,7 @@ const PlanSelection = () => {
                                     Risk-Adjusted <span className="text-brand">Premium</span>
                                 </h1>
                                 <p className="text-slate-500 font-medium text-sm">
-                                    Live weather and air quality analysis for <span className="text-slate-900 font-bold">{user?.pincode || 'Protected Area'}</span> completed.
+                                    Local area history for <span className="text-slate-900 font-bold">{activeZone}</span> (PIN: {user?.pincode || safeGetItem('registrationPincode')}) processed.
                                 </p>
 
                                 {error && (
@@ -234,9 +271,51 @@ const PlanSelection = () => {
                         </motion.div>
                     )}
 
-                    {step === 'payment' && (
+                    {step === 'demo-payment' && (
                         <motion.div 
-                            key="payment"
+                            key="demo-payment"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="flex flex-col items-center justify-center min-h-[60vh] space-y-10"
+                        >
+                            <div className="max-w-md w-full bg-white p-10 rounded-[3rem] border border-slate-100 shadow-2xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-emerald-500/10 blur-[50px] rounded-full translate-x-1/2 -translate-y-1/2" />
+                                
+                                <h2 className="text-2xl font-black text-slate-900 mb-8 text-center">{isUpgradeMode ? 'Confirm Plan Change' : 'Complete Payment'}</h2>
+                                
+                                <div className="space-y-6">
+                                    <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+                                        <div className="text-sm font-bold text-slate-500">Selected Plan</div>
+                                        <div className="text-lg font-black text-slate-900 uppercase">{selectedPlan?.name}</div>
+                                    </div>
+                                    <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+                                        <div className="text-sm font-bold text-slate-500">Coverage Limit</div>
+                                        <div className="text-lg font-black text-slate-900">{selectedPlan?.coverage}</div>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-2">
+                                        <div className="text-sm font-bold text-slate-500">Total Premium</div>
+                                        <div className="text-3xl font-black text-brand">₹{selectedPlan?.price}</div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={confirmPaymentDemo}
+                                    className="w-full mt-10 py-5 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-[0.2em] rounded-3xl shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-3 active:scale-95"
+                                >
+                                    <CreditCard size={20} />
+                                    Confirm & Pay ₹{selectedPlan?.price}
+                                </button>
+                                
+                                <p className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-6">
+                                    Demo Mode • Secure Internal Gateway
+                                </p>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {step === 'processing-payment' && (
+                        <motion.div 
+                            key="processing-payment"
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             className="h-[80vh] flex flex-col items-center justify-center space-y-10"
@@ -246,9 +325,9 @@ const PlanSelection = () => {
                                 <div className="absolute inset-0 bg-brand/5 animate-pulse" />
                             </div>
                             <div className="text-center space-y-3">
-                                <h2 className="text-2xl font-black uppercase tracking-tight text-slate-800">Finalizing Gateway</h2>
+                                <h2 className="text-2xl font-black uppercase tracking-tight text-slate-800">Processing Payment</h2>
                                 <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-2">
-                                    Securely connecting with UPI...
+                                    Securely communicating with bank...
                                 </p>
                             </div>
                         </motion.div>

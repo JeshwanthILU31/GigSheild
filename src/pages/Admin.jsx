@@ -28,6 +28,7 @@ import {
   Cell 
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
+import { safeRemoveItems } from '../utils/storage';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
@@ -64,7 +65,7 @@ const AdminDashboard = () => {
     ];
 
     const handleLogout = () => {
-        localStorage.removeItem('adminToken');
+        safeRemoveItems('adminToken');
         navigate('/admin/login');
     };
 
