@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:6006';
+const API_BASE_URL = 'https://gigsheild-i53f.onrender.com';
 
 const ENDPOINTS = {
     AUTH: {

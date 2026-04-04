@@ -11,6 +11,7 @@ const VerifyOtp = () => {
     const { verifyOtp, resendOtp } = useAuth();
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [email, setEmail] = useState('');
+    const [devOtp, setDevOtp] = useState('');
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
@@ -22,6 +23,11 @@ const VerifyOtp = () => {
             navigate('/register');
         } else {
             setEmail(storedEmail);
+        }
+
+        const storedOtp = safeGetItem('devOtp');
+        if (storedOtp) {
+            setDevOtp(storedOtp);
         }
     }, [navigate]);
 
@@ -59,7 +65,7 @@ const VerifyOtp = () => {
         try {
             const result = await verifyOtp({ email, otp: otpValue });
             if (result.success) {
-                safeRemoveItems('isNewRegistration', 'pendingRegistrationData');
+                safeRemoveItems('isNewRegistration', 'pendingRegistrationData', 'devOtp');
                 navigate('/dashboard/select-location');
             } else {
                 setError(result.error || result.data?.message || 'OTP verification failed');
@@ -85,6 +91,11 @@ const VerifyOtp = () => {
             const result = await resendOtp(pendingRegistrationData);
             if (result.success) {
                 setMessage(result.data?.message || 'OTP sent successfully.');
+                if (result.data?.otp) {
+                    setDevOtp(result.data.otp);
+                } else if (safeGetItem('devOtp')) {
+                    setDevOtp(safeGetItem('devOtp'));
+                }
             } else {
                 setError(result.error || result.data?.message || 'Failed to resend OTP.');
             }
@@ -168,6 +179,13 @@ const VerifyOtp = () => {
                     </Link>
                 </div>
             </motion.div>
+
+            {devOtp && (
+                <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-6 py-4 rounded-3xl shadow-2xl z-50 flex flex-col gap-1 border border-slate-700/50 hover:-translate-y-1 transition-all cursor-pointer" onClick={() => navigator.clipboard.writeText(devOtp)}>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Demo Mode OTP</p>
+                    <p className="text-3xl font-black tracking-[0.2em] text-brand">{devOtp}</p>
+                </div>
+            )}
         </div>
     );
 };

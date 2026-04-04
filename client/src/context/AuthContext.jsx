@@ -79,7 +79,9 @@ export const AuthProvider = ({ children }) => {
             const response = await api.post(ENDPOINTS.AUTH.REGISTER, userData);
             // Save pincode for zone filtering in dashboard
             safeSetItem('registrationPincode', userData.pinCode);
-            safeSetItem('registrationName', userData.name);
+            if (response.data?.otp) {
+                safeSetItem('devOtp', response.data.otp);
+            }
             return { success: true, data: response.data };
         } catch (error) {
             // Fallback for demo/development if backend is offline
@@ -87,7 +89,8 @@ export const AuthProvider = ({ children }) => {
                 console.warn('Backend offline, using mock registration');
                 safeSetItem('registrationPincode', userData.pinCode);
                 safeSetItem('registrationName', userData.name);
-                return { success: true, data: { message: 'Mock registration successful' } };
+                safeSetItem('devOtp', '123456');
+                return { success: true, data: { message: 'Mock registration successful', otp: '123456' } };
             }
             return { success: false, error: error.response?.data?.message || 'Registration failed' };
         }
@@ -154,13 +157,17 @@ export const AuthProvider = ({ children }) => {
             if (registrationData?.name) {
                 safeSetItem('registrationName', registrationData.name);
             }
+            if (response.data?.otp) {
+                safeSetItem('devOtp', response.data.otp);
+            }
 
             return { success: Boolean(response.data?.success), data: response.data };
         } catch (error) {
             // Fallback for demo/development
             if (!error.response && registrationData) {
                 console.warn('Backend offline, using mock OTP resend');
-                return { success: true, data: { message: 'Mock OTP sent' } };
+                safeSetItem('devOtp', '123456');
+                return { success: true, data: { message: 'Mock OTP sent', otp: '123456' } };
             }
             return { success: false, error: error.response?.data?.message || 'Resend OTP failed' };
         }
