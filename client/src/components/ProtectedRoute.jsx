@@ -17,15 +17,11 @@ const ProtectedRoute = ({ children }) => {
         );
     }
 
-<<<<<<< HEAD
     // A user is considered authenticated if they are logged in via AuthContext 
     // OR if they've successfully finished the demo registration flow (isRegistered)
     const isUserAuthenticated = isAuthenticated || isRegistered;
 
     if (!isUserAuthenticated) {
-=======
-    if (!isAuthenticated) {
->>>>>>> 86766f9345e54c39e89819d4ef53aab8b1976759
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 

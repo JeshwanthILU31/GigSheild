@@ -1,128 +1,115 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import Home from '../pages/Home';
-import PricingPage from '../pages/PricingPage';
-import Register from '../pages/Register';
-import VerifyOtp from '../pages/VerifyOTP';
-import LoginPage from '../pages/Login';
-import Dashboard from '../pages/Dashboard';
-import Policy from '../pages/Policy';
+
 import DashboardLayout from '../layouts/DashboardLayout';
-import { useSimulation } from '../context/SimulationContext';
-import { useAuth } from '../context/AuthContext.jsx';
 import ProtectedRoute from '../components/ProtectedRoute.jsx';
 import PublicRoute from '../components/PublicRoute.jsx';
 import AdminProtectedRoute from '../components/AdminProtectedRoute';
-import HistoryPage from '../pages/HistoryPage';
-import SettingsPage from '../pages/SettingsPage';
-import PlanSelection from '../pages/PlanSelection';
-<<<<<<< HEAD
-import ProfilePage from '../pages/ProfilePage';
-import AdminLogin from '../pages/AdminLogin';
-import AdminDashboard from '../pages/Admin';
+
+// Lazy loaded pages
+const Home = lazy(() => import('../pages/Home'));
+const PricingPage = lazy(() => import('../pages/PricingPage'));
+const Register = lazy(() => import('../pages/Register'));
+const VerifyOtp = lazy(() => import('../pages/VerifyOTP'));
+const LoginPage = lazy(() => import('../pages/Login'));
+const Dashboard = lazy(() => import('../pages/Dashboard'));
+const Policy = lazy(() => import('../pages/Policy'));
+const HistoryPage = lazy(() => import('../pages/HistoryPage'));
+const SettingsPage = lazy(() => import('../pages/SettingsPage'));
+const PlanSelection = lazy(() => import('../pages/PlanSelection'));
+const LocationSelection = lazy(() => import('../pages/LocationSelection'));
+const BillingPage = lazy(() => import('../pages/BillingPage'));
+const ProfilePage = lazy(() => import('../pages/ProfilePage'));
+const AdminLogin = lazy(() => import('../pages/AdminLogin'));
+const AdminDashboard = lazy(() => import('../pages/Admin'));
+
+const Loader = () => (
+    <div className="min-h-screen flex items-center justify-center text-slate-500">
+        Loading...
+    </div>
+);
 
 const AppRoutes = () => {
-=======
-import LocationSelection from '../pages/LocationSelection';
-import BillingPage from '../pages/BillingPage';
-
-import ProfilePage from '../pages/ProfilePage';
-import AdminLogin from '../pages/AdminLogin';
-import AdminDashboard from '../pages/Admin';
-import { safeGetItem } from '../utils/storage';
-
-const AppRoutes = () => {
-    const { isRegistered } = useSimulation();
-    const { isAuthenticated } = useAuth();
-    const isAdmin = safeGetItem('adminToken') === 'mock-admin-session';
-
-    // Bridge for transition: consider user authenticated if either context says so
-    const isUserAuthenticated = isAuthenticated || isRegistered;
-
->>>>>>> 86766f9345e54c39e89819d4ef53aab8b1976759
     return (
-        <Routes>
-            {/* Public/Guest Routes - Wrapped in PublicRoute to redirect away if already logged in */}
-            <Route 
-                path="/" 
-<<<<<<< HEAD
-                element={
-                    <PublicRoute>
-                        <Home />
-                    </PublicRoute>
-                } 
-            />
-            <Route 
-                path="/register" 
-                element={
-                    <PublicRoute>
-                        <Register />
-                    </PublicRoute>
-                } 
-            />
-            <Route 
-                path="/verify-otp" 
-                element={
-                    <PublicRoute>
-                        <VerifyOtp />
-                    </PublicRoute>
-                } 
-            />
-            <Route 
-                path="/login" 
-                element={
-                    <PublicRoute>
-                        <LoginPage />
-                    </PublicRoute>
-                } 
-=======
-                element={<Home />} 
->>>>>>> 86766f9345e54c39e89819d4ef53aab8b1976759
-            />
-            
-            {/* Admin Routes - Separately protected for administrative access */}
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route 
-                path="/admin" 
-                element={
-                    <AdminProtectedRoute>
-                        <AdminDashboard />
-                    </AdminProtectedRoute>
-                } 
-            />
-            
-            {/* Protected Routes - Only accessible when authenticated */}
-            <Route 
-                path="/dashboard" 
-                element={
-                    <ProtectedRoute>
-                        <DashboardLayout />
-                    </ProtectedRoute>
-                }
-            >
-                <Route index element={<Dashboard />} />
-                <Route path="select-plan" element={<PlanSelection />} />
-                <Route path="select-location" element={<LocationSelection />} />
-                <Route path="policy" element={<Policy />} />
-                <Route path="billing" element={<BillingPage />} />
-                <Route path="profile" element={<ProfilePage />} />
-                <Route path="history" element={<HistoryPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-            </Route>
+        <Suspense fallback={<Loader />}>
+            <Routes>
+                <Route
+                    path="/"
+                    element={
+                        <PublicRoute>
+                            <Home />
+                        </PublicRoute>
+                    }
+                />
 
-            {/* Additional Protected Areas (like Pricing) */}
-            <Route 
-                path="/pricing" 
-                element={
-                    <ProtectedRoute>
-                        <PricingPage />
-                    </ProtectedRoute>
-                } 
-            />
+                <Route
+                    path="/register"
+                    element={
+                        <PublicRoute>
+                            <Register />
+                        </PublicRoute>
+                    }
+                />
 
-            {/* Fallback to root (which handles redirection via guards) */}
-            <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
+                <Route
+                    path="/verify-otp"
+                    element={
+                        <PublicRoute>
+                            <VerifyOtp />
+                        </PublicRoute>
+                    }
+                />
+
+                <Route
+                    path="/login"
+                    element={
+                        <PublicRoute>
+                            <LoginPage />
+                        </PublicRoute>
+                    }
+                />
+
+                <Route path="/admin/login" element={<AdminLogin />} />
+
+                <Route
+                    path="/admin"
+                    element={
+                        <AdminProtectedRoute>
+                            <AdminDashboard />
+                        </AdminProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/dashboard"
+                    element={
+                        <ProtectedRoute>
+                            <DashboardLayout />
+                        </ProtectedRoute>
+                    }
+                >
+                    <Route index element={<Dashboard />} />
+                    <Route path="select-plan" element={<PlanSelection />} />
+                    <Route path="select-location" element={<LocationSelection />} />
+                    <Route path="policy" element={<Policy />} />
+                    <Route path="billing" element={<BillingPage />} />
+                    <Route path="profile" element={<ProfilePage />} />
+                    <Route path="history" element={<HistoryPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                </Route>
+
+                <Route
+                    path="/pricing"
+                    element={
+                        <ProtectedRoute>
+                            <PricingPage />
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+        </Suspense>
     );
 };
 
